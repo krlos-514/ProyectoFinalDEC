@@ -1,0 +1,159 @@
+section .data
+    mensajeEntrada db 'Ingrese un año de 4 digitos: ', 0xA
+    ; Mensaje que se mostrará al usuario para ingresar un año, seguido de una nueva línea (0xA)
+    longitudME equ $ - mensajeEntrada
+    ; Calcula la longitud del mensaje de entrada
+    bisiesto db "El año ingresado es bisiesto"
+    ; Mensaje que se mostrará si el año ingresado es bisiesto
+    longitudB equ $ - bisiesto
+    ; Calcula la longitud del mensaje "bisiesto"
+    noBisiesto db "El año ingresado no es bisiesto"
+    ; Mensaje que se mostrará si el año ingresado no es bisiesto
+    longitudNB equ $ - noBisiesto
+    ; Calcula la longitud del mensaje "no bisiesto"
+    error db "Error: Ingrese un año valido de 4 digitos", 0xA
+    ; Mensaje de error si el input es inválido, seguido de una nueva línea
+    longitudE equ $ - error
+    ; Calcula la longitud del mensaje de error
+
+section .bss
+    numero resb 5
+    ; Reserva 5 bytes de espacio para almacenar el año ingresado por el usuario
+
+%macro mostrarMensaje 2
+    mov eax, 4
+    ; Syscall número 4 (sys_write) para escribir
+    mov ebx, 1
+    ; File descriptor 1 (stdout)
+    mov ecx, %1
+    ; Dirección del mensaje a mostrar (primer parámetro del macro)
+    mov edx, %2
+    ; Longitud del mensaje (segundo parámetro del macro)
+    int 0x80
+    ; Llamada al sistema
+%endmacro
+
+%macro salir 0
+    mov eax, 1
+    ; Syscall número 1 (sys_exit) para salir del programa
+    mov ebx, 0
+    ; Código de salida 0
+    int 0x80
+    ; Llamada al sistema
+%endmacro
+
+section .text
+    global _start
+    ; Punto de entrada del programa
+
+_start:
+    ; Mostrar mensaje de entrada
+    mostrarMensaje mensajeEntrada, longitudME
+
+    ; Leer el año ingresado
+    mov eax, 3
+    ; Syscall número 3 (sys_read) para leer entrada
+    mov ebx, 0
+    ; File descriptor 0 (stdin)
+    mov ecx, numero
+    ; Dirección de almacenamiento del input
+    mov edx, 5
+    ; Leer hasta 5 bytes
+    int 0x80
+    ; Llamada al sistema
+
+    ; Verificar que se hayan ingresado exactamente 4 dígitos
+    mov ecx, 4
+    ; Contador para 4 dígitos
+    mov ebx, numero
+    ; Dirección de almacenamiento del input
+    mov al, [ebx+4]
+    ; Obtener el 5º byte
+    cmp al, 0xA
+    ; Comprobar si es un salto de línea (0xA)
+    je _validar_longitud
+    ; Si es salto de línea, ir a validar longitud
+    jmp _error
+    ; De lo contrario, ir a la rutina de error
+
+_validar_longitud:
+    inc ebx
+    ; Incrementar ebx para avanzar al siguiente byte
+    mov al, [ebx+4]
+    ; Obtener el byte en ebx+4
+    cmp al, 0
+    ; Comparar con 0
+    jne _error
+    ; Si no es 0, ir a la rutina de error
+
+    ; Validar que todos los caracteres ingresados sean dígitos
+    mov ecx, 4
+    ; Contador para 4 dígitos
+    mov ebx, numero
+    ; Dirección de almacenamiento del input
+    
+validar:
+    mov al, [ebx]
+    ; Obtener el byte en ebx
+    cmp al, '0'
+    ; Comparar con '0'
+    jl _error
+    ; Si es menor, ir a la rutina de error
+    cmp al, '9'
+    ; Comparar con '9'
+    jg _error
+    ; Si es mayor, ir a la rutina de error
+    inc ebx
+    ; Incrementar ebx para avanzar al siguiente byte
+    loop validar
+    ; Repetir hasta que ecx sea 0
+
+    ; Convertir el año ingresado a un número entero
+    mov eax, 0
+    ; Inicializar eax en 0
+    mov ecx, 4
+    ; Contador para 4 dígitos
+    mov ebx, numero
+    ; Dirección de almacenamiento del input
+convertir:
+    movzx edx, byte [ebx]
+    ; Obtener el byte en ebx y extenderlo a 32 bits en edx
+    sub edx, '0'
+    ; Restar '0' para convertir el carácter a número
+    imul eax, 10
+    ; Multiplicar eax por 10
+    add eax, edx
+    ; Sumar el número a eax
+    inc ebx
+    ; Incrementar ebx para avanzar al siguiente byte
+    loop convertir
+    ; Repetir hasta que ecx sea 0
+
+    ; Verificar si el año ingresado es bisiesto
+    mov ebx, 4
+    ; Divisor 4
+    mov edx, 0
+    ; Inicializar edx en 0
+    div ebx
+    ; Dividir eax por ebx, resultado en eax, resto en edx
+    test edx, edx
+    ; Probar si el resto es 0
+    jz _bisiesto
+    ; Si es 0, ir a la rutina bisiesto
+    jmp _noBisiesto
+    ; De lo contrario, ir a la rutina noBisiesto
+
+_bisiesto:
+    ; Mostrar mensaje de año bisiesto
+    mostrarMensaje bisiesto, longitudB
+    salir
+
+_noBisiesto:
+    ; Mostrar mensaje de año no bisiesto
+    mostrarMensaje noBisiesto, longitudNB
+    salir
+
+_error:
+    ; Mostrar mensaje de error
+    mostrarMensaje error, longitudE
+    salir
